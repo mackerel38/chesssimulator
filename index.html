@@ -118,8 +118,10 @@
               for (let i = 1; i <= maxDistance; i++) {
                 const newRow = row + dr * i;
                 const newCol = col + dc * i;
-                if (newRow < 0 || newRow >= 7 || newCol < 0 || newCol >= 9 || !bagGrid[newRow][newCol]) break;
-                addMove(newRow, newCol);
+                if (newRow < 0 || newRow >= 7 || newCol < 0 || newCol >= 9) break;
+                if (bagGrid[newRow][newCol]) {
+                  addMove(newRow, newCol);
+                }
               }
             };
 
