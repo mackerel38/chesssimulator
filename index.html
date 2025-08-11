@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backpack battlesチェスシミュレーター</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .lucide {
+            width: 1rem;
+            height: 1rem;
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // Lucide アイコンの簡易実装
+        const Play = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6v12z"/></svg>;
+        const Pause = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>;
+        const Settings = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const BarChart3 = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
+        const ChevronRight = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>;
+        const ChevronLeft = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>;
+        const Square = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>;
+
+        const PIECE_TYPES = {
+          KING: 'K',
+          QUEEN: 'Q', 
+          ROOK: 'R',
+          BISHOP: 'B',
+          KNIGHT: 'N',
+          PAWN: 'P'
+        };
+
+        const PIECE_NAMES = {
+          'K': 'キング',
+          'Q': 'クイーン',
+          'R': 'ルーク',
+          'B': 'ビショップ',
+          'N': 'ナイト',
+          'P': 'ポーン'
+        };
+
+        const DIRECTIONS = {
+          N: [-1, 0], S: [1, 0], E: [0, 1], W: [0, -1],
+          NE: [-1, 1], NW: [-1, -1], SE: [1, 1], SW: [1, -1]
+        };
+
+        const PAWN_DIRECTION_SYMBOLS = ['↑', '→', '↓', '←'];
+
+        const ChessSimulator = () => {
+          const [mode, setMode] = useState('setup');
+          const [bagGrid, setBagGrid] = useState(Array(7).fill().map(() => Array(9).fill(false)));
+          const [pieces, setPieces] = useState([]);
+          const [selectedPiece, setSelectedPiece] = useState(null);
+          const [simulationData, setSimulationData] = useState([]);
+          const [currentSimulation, setCurrentSimulation] = useState(null);
+          const [isSimulating, setIsSimulating] = useState(false);
+          const [simulationCount, setSimulationCount] = useState(10);
+          
+          const [replayData, setReplayData] = useState(null);
+          const [replayStep, setReplayStep] = useState(0);
+          const [isReplaying, setIsReplaying] = useState(false);
+
+          const handleBagClick = (row, col) => {
+            if (mode !== 'setup') return;
+            
+            const newBagGrid = [...bagGrid];
+            newBagGrid[row][col] = !newBagGrid[row][col];
+            setBagGrid(newBagGrid);
+            
+            if (!newBagGrid[row][col]) {
+              setPieces(pieces.filter(piece => !(piece.row === row && piece.col === col)));
+            }
+          };
+
+          const handlePiecePlace = (row, col) => {
+            if (mode !== 'setup' || !bagGrid[row][col]) return;
+            
+            const existingPiece = pieces.find(p => p.row === row && p.col === col);
+            if (existingPiece) {
+              setPieces(pieces.filter(p => p !== existingPiece));
+              return;
+            }
+            
+            if (selectedPiece) {
+              const newPiece = {
+                id: Date.now(),
+                type: selectedPiece.type,
+                color: selectedPiece.color,
+                direction: selectedPiece.direction,
+                row,
+                col
+              };
+              setPieces([...pieces, newPiece]);
+            }
+          };
+
+          const getPossibleMoves = (piece, currentPieces, bagGrid) => {
+            const moves = [];
+            const { row, col, type, color, direction } = piece;
+            
+            const addMove = (newRow, newCol) => {
+              if (newRow >= 0 && newRow < 7 && newCol >= 0 && newCol < 9 && bagGrid[newRow][newCol]) {
+                moves.push([newRow, newCol]);
+              }
+            };
+
+            const addMovesInDirection = (dr, dc, maxDistance = 7) => {
+              for (let i = 1; i <= maxDistance; i++) {
+                const newRow = row + dr * i;
+                const newCol = col + dc * i;
+                if (newRow < 0 || newRow >= 7 || newCol < 0 || newCol >= 9 || !bagGrid[newRow][newCol]) break;
+                addMove(newRow, newCol);
+              }
+            };
+
+            switch (type) {
+              case 'K':
+                Object.values(DIRECTIONS).forEach(([dr, dc]) => addMove(row + dr, col + dc));
+                break;
+              case 'Q':
+                Object.values(DIRECTIONS).forEach(([dr, dc]) => addMovesInDirection(dr, dc));
+                break;
+              case 'R':
+                [DIRECTIONS.N, DIRECTIONS.S, DIRECTIONS.E, DIRECTIONS.W].forEach(([dr, dc]) => 
+                  addMovesInDirection(dr, dc));
+                break;
+              case 'B':
+                [DIRECTIONS.NE, DIRECTIONS.NW, DIRECTIONS.SE, DIRECTIONS.SW].forEach(([dr, dc]) => 
+                  addMovesInDirection(dr, dc));
+                break;
+              case 'N':
+                [[-2,-1], [-2,1], [-1,-2], [-1,2], [1,-2], [1,2], [2,-1], [2,1]].forEach(([dr, dc]) => 
+                  addMove(row + dr, col + dc));
+                break;
+              case 'P':
+                let diagMoves = [];
+                switch (direction) {
+                  case 0:
+                    diagMoves = [[-1, -1], [-1, 1]];
+                    break;
+                  case 1:
+                    diagMoves = [[-1, 1], [1, 1]];
+                    break;
+                  case 2:
+                    diagMoves = [[1, -1], [1, 1]];
+                    break;
+                  case 3:
+                    diagMoves = [[-1, -1], [1, -1]];
+                    break;
+                }
+                diagMoves.forEach(([dr, dc]) => addMove(row + dr, col + dc));
+                break;
+            }
+            
+            return moves;
+          };
+
+          const executeOneTurn = (currentPieces, currentTurn, gameLog) => {
+            const whitePieces = currentPieces.filter(p => p.color === 'white');
+            const blackPieces = currentPieces.filter(p => p.color === 'black');
+            const currentPlayer = currentTurn % 2 === 0 ? 'white' : 'black';
+            const playerPieces = currentPlayer === 'white' ? whitePieces : blackPieces;
+            const opponentPieces = currentPlayer === 'white' ? blackPieces : whitePieces;
+            
+            if (playerPieces.length === 0) return { pieces: currentPieces, log: gameLog, captures: null, move: null };
+            
+            const randomPiece = playerPieces[Math.floor(Math.random() * playerPieces.length)];
+            const possibleMoves = getPossibleMoves(randomPiece, currentPieces, bagGrid);
+            
+            if (possibleMoves.length === 0) return { pieces: currentPieces, log: gameLog, captures: null, move: null };
+            
+            const captureTargets = possibleMoves.filter(([row, col]) => 
+              opponentPieces.some(p => p.row === row && p.col === col));
+            
+            let targetMove;
+            let capturedPiece = null;
+            
+            if (captureTargets.length > 0) {
+              targetMove = captureTargets[Math.floor(Math.random() * captureTargets.length)];
+              capturedPiece = opponentPieces.find(p => p.row === targetMove[0] && p.col === targetMove[1]);
+            } else {
+              targetMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            }
+            
+            const newPieces = currentPieces.map(p => {
+              if (p === randomPiece) {
+                return { ...p, row: targetMove[0], col: targetMove[1] };
+              }
+              return p;
+            }).filter(p => p !== capturedPiece);
+            
+            const newLog = [...gameLog];
+            const moveDescription = `${currentPlayer === 'white' ? '白' : '黒'}${PIECE_NAMES[randomPiece.type]}が(${randomPiece.row},${randomPiece.col})から(${targetMove[0]},${targetMove[1]})へ移動`;
+            
+            if (capturedPiece) {
+              newLog.push(`ターン ${currentTurn + 1}: ${moveDescription} - ${capturedPiece.color === 'white' ? '白' : '黒'}${PIECE_NAMES[capturedPiece.type]}を取得`);
+            } else {
+              newLog.push(`ターン ${currentTurn + 1}: ${moveDescription}`);
+            }
+            
+            return { 
+              pieces: newPieces, 
+              log: newLog, 
+              captures: capturedPiece ? { attacker: randomPiece, captured: capturedPiece } : null,
+              move: {
+                piece: randomPiece,
+                from: [randomPiece.row, randomPiece.col],
+                to: targetMove,
+                captured: capturedPiece
+              }
+            };
+          };
+
+          const runSingleSimulation = async (withReplay = false) => {
+            let currentPieces = [...pieces];
+            let currentTurn = 0;
+            let gameLog = [];
+            let captureStats = {};
+            let replaySteps = [];
+            
+            pieces.forEach(piece => {
+              const key = `${piece.color}_${piece.type}`;
+              if (!captureStats[key]) {
+                captureStats[key] = { captured: 0, captures: 0 };
+              }
+            });
+            
+            if (withReplay) {
+              replaySteps.push({
+                turn: 0,
+                pieces: [...currentPieces],
+                log: [...gameLog]
+              });
+            }
+            
+            while (currentTurn < 1000 && currentPieces.length > 1) {
+              const result = executeOneTurn(currentPieces, currentTurn, gameLog);
+              currentPieces = result.pieces;
+              gameLog = result.log;
+              
+              if (result.captures) {
+                const attackerKey = `${result.captures.attacker.color}_${result.captures.attacker.type}`;
+                const capturedKey = `${result.captures.captured.color}_${result.captures.captured.type}`;
+                
+                if (captureStats[attackerKey]) captureStats[attackerKey].captures++;
+                if (captureStats[capturedKey]) captureStats[capturedKey].captured++;
+              }
+              
+              currentTurn++;
+              
+              if (withReplay) {
+                replaySteps.push({
+                  turn: currentTurn,
+                  pieces: [...currentPieces],
+                  log: [...gameLog],
+                  move: result.move
+                });
+              }
+            }
+            
+            return { 
+              captureStats, 
+              finalTurn: currentTurn, 
+              gameLog,
+              replaySteps: withReplay ? replaySteps : null
+            };
+          };
+
+          const runMultipleSimulations = async () => {
+            setIsSimulating(true);
+            setMode('simulation');
+            const results = [];
+            
+            for (let i = 0; i < simulationCount; i++) {
+              const result = await new Promise(resolve => {
+                setTimeout(() => {
+                  resolve(runSingleSimulation(i === 0));
+                }, 10);
+              });
+              results.push(result);
+              
+              setCurrentSimulation({
+                current: i + 1,
+                total: simulationCount,
+                lastResult: result
+              });
+            }
+            
+            setSimulationData(results);
+            setIsSimulating(false);
+          };
+
+          const startReplay = () => {
+            if (simulationData.length > 0 && simulationData[0].replaySteps) {
+              setReplayData(simulationData[0].replaySteps);
+              setReplayStep(0);
+              setMode('replay');
+            }
+          };
+
+          const playReplay = () => {
+            if (!replayData || isReplaying) return;
+            
+            setIsReplaying(true);
+            const interval = setInterval(() => {
+              setReplayStep(current => {
+                if (current >= replayData.length - 1) {
+                  setIsReplaying(false);
+                  clearInterval(interval);
+                  return current;
+                }
+                return current + 1;
+              });
+            }, 500);
+          };
+
+          const pauseReplay = () => {
+            setIsReplaying(false);
+          };
+
+          const stepReplay = (direction) => {
+            if (!replayData) return;
+            setReplayStep(current => {
+              const newStep = current + direction;
+              return Math.max(0, Math.min(newStep, replayData.length - 1));
+            });
+          };
+
+          const calculateStatistics = () => {
+            if (simulationData.length === 0) return {};
+            
+            const stats = {};
+            
+            simulationData.forEach(result => {
+              Object.entries(result.captureStats).forEach(([key, data]) => {
+                if (!stats[key]) {
+                  stats[key] = { captures: [], captured: [] };
+                }
+                stats[key].captures.push(data.captures);
+                stats[key].captured.push(data.captured);
+              });
+            });
+            
+            const finalStats = {};
+            Object.entries(stats).forEach(([key, data]) => {
+              finalStats[key] = {
+                avgCaptures: data.captures.reduce((a, b) => a + b, 0) / data.captures.length,
+                avgCaptured: data.captured.reduce((a, b) => a + b, 0) / data.captured.length
+              };
+            });
+            
+            return finalStats;
+          };
+
+          const getPieceDisplay = (piece) => {
+            const colorPrefix = piece.color === 'white' ? 'W' : 'B';
+            if (piece.type === 'P') {
+              return `${colorPrefix}${piece.type}${PAWN_DIRECTION_SYMBOLS[piece.direction]}`;
+            }
+            return `${colorPrefix}${piece.type}`;
+          };
+
+          const statistics = calculateStatistics();
+          const currentReplayStep = replayData ? replayData[replayStep] : null;
+
+          return React.createElement('div', {className: "p-6 max-w-6xl mx-auto"},
+            React.createElement('h1', {className: "text-3xl font-bold mb-6"}, "チェス風ゲームシミュレーター"),
+            
+            React.createElement('div', {className: "flex gap-2 mb-6"},
+              React.createElement('button', {
+                onClick: () => setMode('setup'),
+                className: `px-4 py-2 rounded ${mode === 'setup' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`
+              }, React.createElement(Settings, {className: "inline mr-2 w-4 h-4"}), "セットアップ"),
+              React.createElement('button', {
+                onClick: () => setMode('simulation'),
+                className: `px-4 py-2 rounded ${mode === 'simulation' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`,
+                disabled: pieces.length === 0
+              }, React.createElement(Play, {className: "inline mr-2 w-4 h-4"}), "シミュレーション"),
+              React.createElement('button', {
+                onClick: () => setMode('statistics'),
+                className: `px-4 py-2 rounded ${mode === 'statistics' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`,
+                disabled: simulationData.length === 0
+              }, React.createElement(BarChart3, {className: "inline mr-2 w-4 h-4"}), "統計"),
+              React.createElement('button', {
+                onClick: startReplay,
+                className: `px-4 py-2 rounded ${mode === 'replay' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`,
+                disabled: !simulationData.length || !simulationData[0].replaySteps
+              }, React.createElement(Square, {className: "inline mr-2 w-4 h-4"}), "リプレイ")
+            ),
+
+            mode === 'setup' && React.createElement('div', {className: "space-y-6"},
+              React.createElement('div', {},
+                React.createElement('h2', {className: "text-xl font-semibold mb-4"}, "バッグの配置 (7行×9列)"),
+                React.createElement('div', {className: "grid grid-cols-9 gap-1 w-fit"},
+                  bagGrid.map((row, rowIndex) =>
+                    row.map((cell, colIndex) =>
+                      React.createElement('div', {
+                        key: `${rowIndex}-${colIndex}`,
+                        onClick: () => handleBagClick(rowIndex, colIndex),
+                        className: `w-10 h-10 border cursor-pointer flex items-center justify-center text-xs ${
+                          cell ? 'bg-green-200 border-green-400' : 'bg-gray-100 border-gray-300'
+                        }`
+                      })
+                    )
+                  )
+                )
+              ),
+
+              React.createElement('div', {},
+                React.createElement('h2', {className: "text-xl font-semibold mb-4"}, "駒の選択"),
+                React.createElement('div', {className: "space-y-2"},
+                  ['white', 'black'].map(color =>
+                    React.createElement('div', {key: color, className: "flex gap-2 items-center"},
+                      React.createElement('span', {className: "w-12 font-semibold"}, color === 'white' ? '白' : '黒', ':'),
+                      Object.entries(PIECE_TYPES).map(([name, type]) =>
+                        React.createElement('button', {
+                          key: `${color}-${type}`,
+                          onClick: () => setSelectedPiece({ type, color, direction: 0 }),
+                          className: `px-3 py-2 border rounded font-mono ${
+                            selectedPiece?.type === type && selectedPiece?.color === color
+                              ? 'bg-blue-200 border-blue-400'
+                              : 'bg-white border-gray-300'
+                          }`
+                        }, `${color === 'white' ? 'W' : 'B'}${type}`)
+                      )
+                    )
+                  ),
+                  selectedPiece?.type === 'P' && React.createElement('div', {className: "flex gap-2 items-center ml-16"},
+                    React.createElement('span', {}, "向き:"),
+                    ['↑', '→', '↓', '←'].map((arrow, index) =>
+                      React.createElement('button', {
+                        key: index,
+                        onClick: () => setSelectedPiece({...selectedPiece, direction: index}),
+                        className: `px-2 py-1 border rounded ${
+                          selectedPiece.direction === index ? 'bg-blue-200' : 'bg-white'
+                        }`
+                      }, arrow)
+                    )
+                  )
+                )
+              ),
+
+              React.createElement('div', {},
+                React.createElement('h2', {className: "text-xl font-semibold mb-4"}, "駒の配置"),
+                React.createElement('div', {className: "grid grid-cols-9 gap-1 w-fit"},
+                  bagGrid.map((row, rowIndex) =>
+                    row.map((cell, colIndex) => {
+                      const piece = pieces.find(p => p.row === rowIndex && p.col === colIndex);
+                      return React.createElement('div', {
+                        key: `${rowIndex}-${colIndex}`,
+                        onClick: () => handlePiecePlace(rowIndex, colIndex),
+                        className: `w-10 h-10 border flex items-center justify-center text-xs font-mono cursor-pointer ${
+                          cell 
+                            ? 'bg-green-100 border-green-400 hover:bg-green-200' 
+                            : 'bg-gray-50 border-gray-300'
+                        }`
+                      }, piece && getPieceDisplay(piece));
+                    })
+                  )
+                )
+              )
+            ),
+
+            mode === 'simulation' && React.createElement('div', {className: "space-y-6"},
+              React.createElement('div', {className: "flex gap-4 items-center"},
+                React.createElement('label', {},
+                  "シミュレーション回数:",
+                  React.createElement('input', {
+                    type: "number",
+                    value: simulationCount,
+                    onChange: (e) => setSimulationCount(parseInt(e.target.value)),
+                    className: "ml-2 px-2 py-1 border rounded w-20",
+                    min: "1",
+                    max: "100"
+                  })
+                ),
+                React.createElement('button', {
+                  onClick: runMultipleSimulations,
+                  disabled: isSimulating,
+                  className: "px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+                }, isSimulating ? '実行中...' : 'シミュレーション開始')
+              ),
+
+              currentSimulation && React.createElement('div', {className: "p-4 bg-gray-100 rounded"},
+                React.createElement('div', {className: "font-semibold"},
+                  `進捗: ${currentSimulation.current} / ${currentSimulation.total}`
+                ),
+                currentSimulation.lastResult && React.createElement('div', {className: "mt-2 text-sm"},
+                  `最終ターン: ${currentSimulation.lastResult.finalTurn}`
+                )
+              )
+            ),
+
+            mode === 'replay' && replayData && React.createElement('div', {className: "space-y-6"},
+              React.createElement('div', {className: "flex gap-4 items-center"},
+                React.createElement('button', {
+                  onClick: () => stepReplay(-1),
+                  disabled: replayStep === 0,
+                  className: "px-3 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
+                }, React.createElement(ChevronLeft, {className: "w-4 h-4"})),
+                React.createElement('button', {
+                  onClick: isReplaying ? pauseReplay : playReplay,
+                  className: "px-4 py-2 bg-green-500 text-white rounded"
+                }, isReplaying ? React.createElement(Pause, {className: "w-4 h-4"}) : React.createElement(Play, {className: "w-4 h-4"})),
+                React.createElement('button', {
+                  onClick: () => stepReplay(1),
+                  disabled: replayStep === replayData.length - 1,
+                  className: "px-3 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
+                }, React.createElement(ChevronRight, {className: "w-4 h-4"})),
+                React.createElement('span', {className: "text-sm"},
+                  `ターン: ${replayStep} / ${replayData.length - 1}`
+                )
+              ),
+
+              currentReplayStep && React.createElement('div', {className: "flex gap-6"},
+                React.createElement('div', {},
+                  React.createElement('h3', {className: "text-lg font-semibold mb-2"}, "盤面"),
+                  React.createElement('div', {className: "grid grid-cols-9 gap-1 w-fit"},
+                    bagGrid.map((row, rowIndex) =>
+                      row.map((cell, colIndex) => {
+                        const piece = currentReplayStep.pieces.find(p => p.row === rowIndex && p.col === colIndex);
+                        return React.createElement('div', {
+                          key: `${rowIndex}-${colIndex}`,
+                          className: `w-10 h-10 border flex items-center justify-center text-xs font-mono ${
+                            cell 
+                              ? 'bg-green-100 border-green-400' 
+                              : 'bg-gray-50 border-gray-300'
+                          }`
+                        }, piece && getPieceDisplay(piece));
+                      })
+                    )
+                  )
+                ),
+                
+                React.createElement('div', {className: "flex-1"},
+                  React.createElement('h3', {className: "text-lg font-semibold mb-2"}, "ゲームログ"),
+                  React.createElement('div', {className: "max-h-64 overflow-y-auto bg-gray-100 p-4 rounded text-sm"},
+                    currentReplayStep.log.slice(-10).map((entry, index) =>
+                      React.createElement('div', {key: index, className: "mb-1"}, entry)
+                    )
+                  )
+                )
+              )
+            ),
+
+            mode === 'statistics' && React.createElement('div', {className: "space-y-6"},
+              React.createElement('h2', {className: "text-xl font-semibold"}, "シミュレーション結果統計"),
+              React.createElement('div', {className: "text-sm text-gray-600"},
+                `実行回数: ${simulationData.length}回`
+              ),
+              
+              React.createElement('div', {className: "overflow-x-auto"},
+                React.createElement('table', {className: "w-full border-collapse border border-gray-300"},
+                  React.createElement('thead', {},
+                    React.createElement('tr', {className: "bg-gray-100"},
+                      React.createElement('th', {className: "border border-gray-300 px-4 py-2"}, "駒"),
+                      React.createElement('th', {className: "border border-gray-300 px-4 py-2"}, "平均取った回数"),
+                      React.createElement('th', {className: "border border-gray-300 px-4 py-2"}, "平均取られた回数")
+                    )
+                  ),
+                  React.createElement('tbody', {},
+                    Object.entries(statistics).map(([key, data]) => {
+                      const [color, type] = key.split('_');
+                      return React.createElement('tr', {key},
+                        React.createElement('td', {className: "border border-gray-300 px-4 py-2 font-mono"},
+                          `${color === 'white' ? 'W' : 'B'}${type} (${color === 'white' ? '白' : '黒'}${PIECE_NAMES[type]})`
+                        ),
+                        React.createElement('td', {className: "border border-gray-300 px-4 py-2 text-right"},
+                          data.avgCaptures.toFixed(2)
+                        ),
+                        React.createElement('td', {className: "border border-gray-300 px-4 py-2 text-right"},
+                          data.avgCaptured.toFixed(2)
+                        )
+                      );
+                    })
+                  )
+                )
+              )
+            )
+          );
+        };
+
+        ReactDOM.render(React.createElement(ChessSimulator), document.getElementById('root'));
+    </script>
+</body>
+</html>
