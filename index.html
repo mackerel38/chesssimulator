@@ -23,7 +23,6 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // Lucide アイコンの簡易実装
         const Play = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6v12z"/></svg>;
         const Pause = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>;
         const Settings = () => <svg className="lucide" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
@@ -381,7 +380,7 @@
               React.createElement('button', {
                 onClick: () => setMode('setup'),
                 className: `px-4 py-2 rounded ${mode === 'setup' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`
-              }, React.createElement(Settings, {className: "inline mr-2 w-4 h-4"}), "セットアップ"),
+              }, React.createElement(Settings, {className: "inline mr-2 w-4 h-4"}), "設定"),
               React.createElement('button', {
                 onClick: () => setMode('simulation'),
                 className: `px-4 py-2 rounded ${mode === 'simulation' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`,
@@ -401,7 +400,7 @@
 
             mode === 'setup' && React.createElement('div', {className: "space-y-6"},
               React.createElement('div', {},
-                React.createElement('h2', {className: "text-xl font-semibold mb-4"}, "バッグの配置 (7行×9列)"),
+                React.createElement('h2', {className: "text-xl font-semibold mb-4"}, "バッグの配置"),
                 React.createElement('div', {className: "grid grid-cols-9 gap-1 w-fit"},
                   bagGrid.map((row, rowIndex) =>
                     row.map((cell, colIndex) =>
